@@ -1,0 +1,36 @@
+{
+  "name": "childhood-game-maker",
+  "version": "0.1.0",
+  "description": "对话式生成「你自己的童年」小游戏 —— 聊几句，把小时候住过的地方，做成一个能走进去的地方。",
+  "type": "module",
+  "keywords": [
+    "game-generator",
+    "childhood",
+    "nostalgia",
+    "ai",
+    "conversational",
+    "canvas",
+    "chinese-childhood",
+    "童年",
+    "小游戏生成"
+  ],
+  "license": "MIT",
+  "author": "Wang Chenyu (Eurus918)",
+  "homepage": "https://github.com/Eurus918/childhood-game-maker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eurus918/childhood-game-maker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Eurus918/childhood-game-maker/issues"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.js",
+    "start": "node scripts/serve.js",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

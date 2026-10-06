@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>童年游戏制作小助手 · 把你的小时候做成一个能走进去的地方</title>
+  <meta name="description" content="对话式生成「你自己的童年」小游戏：聊几句，把小时候住过的地方做成一个能玩、能发给别人的地方。">
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">童年游戏制作小助手 <span class="tag">v0.1 · 开源</span></div>
+    <div class="hint">不用写代码，聊几句，把你的小时候做成一个能走进去的地方</div>
+  </header>
+
+  <div class="body">
+    <aside class="chat">
+      <div class="chat-hd">跟它说说你的小时候</div>
+      <div class="msgs" id="msgs"></div>
+      <div class="opts" id="opts"></div>
+      <form class="composer" id="composer" autocomplete="off">
+        <input id="input" placeholder="也可以自己说一句…">
+        <button type="submit">发送</button>
+      </form>
+    </aside>
+
+    <main class="stage">
+      <div class="stage-top">
+        <div class="stitle" id="stitle">还没起名</div>
+        <div class="checklist" id="checklist"></div>
+        <button class="btn" id="playBtn" disabled>进去玩 →</button>
+      </div>
+
+      <canvas id="cv" width="960" height="600"></canvas>
+      <div class="controls" id="controls">回答左边的问题，右边的世界会长出来</div>
+
+      <div class="actions">
+        <button class="btn ghost" id="exportBtn" disabled>导出存档</button>
+        <button class="btn ghost" id="shareBtn" disabled>复制分享链接</button>
+        <button class="btn ghost" id="importBtn">导入存档</button>
+        <button class="btn ghost" id="redoBtn">重做一个</button>
+        <input type="file" id="importInput" accept=".json" hidden>
+      </div>
+
+      <div class="sharebox" id="shareBox" hidden>
+        <input id="shareInput" readonly>
+        <button class="btn ghost" id="copyBtn">复制</button>
+      </div>
+
+      <div class="toastbar" id="toastBar" hidden></div>
+    </main>
+  </div>
+
+  <footer>
+    做完了发给谁？——这才是这个产品存在的理由。<br>
+    开源在 <a href="https://github.com/Eurus918/childhood-game-maker" target="_blank" rel="noopener">GitHub</a>
+    · 欢迎把你自己家乡的童年写进素材库
+  </footer>
+</div>
+
+<!-- 零依赖：不需要 npm install，也不打包。任何静态服务器都能托，包括 GitHub Pages。 -->
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
