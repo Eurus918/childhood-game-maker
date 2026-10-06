@@ -10,6 +10,8 @@ No code. No art skills.
 
 [中文文档](README.md)
 
+**Play online: https://eurus918.github.io/childhood-game-maker/**
+
 ---
 
 ## Run it

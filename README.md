@@ -14,7 +14,9 @@
 
 ## 在线试玩
 
-> 部署后链接会写在这里（GitHub Pages）
+**https://eurus918.github.io/childhood-game-maker/**
+
+不需要安装任何东西，打开就能做、就能玩。
 
 本地跑：
 
