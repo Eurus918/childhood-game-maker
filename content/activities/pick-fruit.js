@@ -4,6 +4,7 @@ export default {
   id: 'fruit',
   label: '摘果子',
   verb: '摘果子',
+  seasons: ['summer', 'autumn'],
   keywords: ['摘', '果子', '果', '吃', '桃', '梨', '桑葚', '枣', '苹果'],
   reply: '摘果子放进去了。不是每棵树都有，熟了的枝子才沉。摘下来的果子在兜里会硌腰，跑起来掉一路。',
   sound: 'good',

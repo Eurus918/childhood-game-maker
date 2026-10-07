@@ -9,6 +9,7 @@ export default {
   id: 'fish',
   label: '摸鱼',
   verb: '摸鱼',
+  seasons: ['summer'],
   keywords: ['鱼', '摸鱼', '抓鱼', '钓', '虾', '泥鳅', '水', '河', '塘'],
   reply: '摸鱼放进去了。我给它设了「有时候会扑空」——蹲半天只捞上来一把水草，也是真的。这个空手的概率，才是记忆里那个下午。',
   sound: 'splash',

@@ -12,6 +12,10 @@ No code. No art skills.
 
 **Play online: https://eurus918.github.io/childhood-game-maker/**
 
+It's also an **installable PWA**: open the link on a phone or desktop browser and
+choose "Add to Home Screen / Install". You get a full-screen app icon that
+**works offline**. Same link, both a web page and an app.
+
 ---
 
 ## Run it
@@ -34,18 +38,32 @@ the source *is* the artifact. Edit anything in `src/` or `content/` and refresh.
 ## How it works
 
 1. Answer 6 questions. The world grows on the right as you answer.
-2. Click **Play**. Arrow keys to move, space to interact. On touch: tap the ground
-   to walk, tap the button at the bottom-right to interact.
+2. Click **Play**. Arrow keys to move, space to interact (**step onto a doorway and
+   press space to change scene**), `TAB` to skip to the next season, `R` to restart.
+   On touch: tap the ground to walk, tap the button at the bottom-right to interact.
 3. **Copy share link** — your whole childhood gets encoded into a URL.
    Anyone who opens it can play it. No backend, no login, no storage.
 4. **Export save** — a JSON file you can import later.
 
+### Five scenes, connected by doors
+
+Northern rural China is the only "full" region: yard, indoors, orchard, the stream
+and the field path are each their own painting. Walk to a doorway, press space.
+Your grandmother stands in the yard — walk up to her and press space, and she'll
+call you home for dinner using the exact words you typed.
+
 ### Stay until dark
 
-There is a day/night cycle. Fish, pick fruit, catch cicadas during the day —
+There is a day/night cycle. Fish and catch cicadas during the day —
 **but cicada nymphs only crawl out of the ground after sunset.**
-
 That's deliberate: waiting is the game. Some things only show up after dark.
+
+### Four seasons: a longer wait
+
+Each season lasts 90 seconds (a full year is 6 minutes) and advances on its own —
+press `TAB` to skip ahead. **Out-of-season activities are locked**, and the game
+tells you when to come back: grasshoppers in spring, fishing and cicadas in
+summer, fruit picking in autumn, roasting eggs on the kang in winter.
 
 ---
 
@@ -81,9 +99,11 @@ See [`content/README.md`](content/README.md).
 npm test
 ```
 
-One test is unusual: a BFS **reachability check**. Moving a tree can silently
-block a player from ever reaching an activity spot — invisible on screen,
-only catchable by test.
+One test is unusual: a BFS **reachability check** — run once per scene. It verifies
+every activity spot and every doorway can be walked to, and that no door overlaps an
+activity spot (otherwise pressing space teleports you away instead of doing the thing).
+Moving a tree can silently block a player from ever reaching an activity spot —
+invisible on screen, only catchable by test.
 
 ---
 

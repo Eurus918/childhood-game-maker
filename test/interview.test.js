@@ -75,12 +75,25 @@ test('自由输入没匹配上时：喊回家的话用原话，标题走兜底',
 
 test('空世界不该有任何东西（采访开始前画布是空的）', () => {
   const w = emptyWorld(content);
-  assert.equal(w.house, null);
-  assert.equal(w.orchard.length, 0);
   assert.equal(w.activities.length, 0);
+  assert.equal(Object.keys(w.scenes).length, 0, '采访还没开始，就已经有场景了');
 });
 
-test('选了摸鱼就必须有水：素材之间的依赖要在编译期兜住', () => {
+test('选了摸鱼就必须有能摸鱼的地方：素材之间的依赖要在编译期兜住', () => {
   const world = buildWorld({ region: 'north-rural', terrain: 'wheat', activity1: 'fish', activity2: 'fruit' }, content);
-  assert.ok(world.water, '选了摸鱼却没水，玩家会摸到空气');
+  const hasFish = world.sceneOrder.some((sid) => world.scenes[sid].activityPos.fish);
+  assert.ok(hasFish, '选了摸鱼却没有能摸鱼的地方，玩家会摸到空气');
+
+  // 旧版单场景地域：选了摸鱼就得有水
+  const old = buildWorld({ region: 'south-watertown', terrain: 'wheat', activity1: 'fish', activity2: 'fruit' }, content);
+  assert.ok(old.scenes.yard.water, '旧版地域选了摸鱼却没水');
+});
+
+test('采访进行中只长出用户挑的那两件，答完才铺开整个地域', () => {
+  const answers = { region: 'north-rural', terrain: 'pond', activity1: 'fish', activity2: 'cicada' };
+  const during = buildWorld(answers, content, { phase: 'build' });
+  assert.deepEqual(during.activities.slice().sort(), ['cicada', 'fish']);
+  const after = buildWorld(answers, content, { phase: 'play' });
+  assert.ok(after.activities.length > 5, '答完之后应该把整个地域的玩法都铺开');
+  assert.ok(after.activities.includes('fish') && after.activities.includes('cicada'));
 });

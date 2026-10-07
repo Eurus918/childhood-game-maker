@@ -3,23 +3,36 @@
  *
  * 所有颜色都从 world.palette / world.houseKind 来 —— 引擎里不写死任何一个
  * 「童年」相关的常量。换一个地域素材，画出来的就是另一种童年。
+ *
+ * 多场景：底图来自 assets/scenes/*.jpg（水彩画），画不到的东西（玩法点、门、
+ * 姥姥）由引擎画在上面。画负责「像不像」，文件里那份 layout 负责「走得通」。
  */
 
-import { nightAmount, phaseOf } from './daynight.js';
+import { nightAmount, phaseOf, SEASONS } from './daynight.js';
 import { actionButtonRect } from './input.js';
+
+const FONT = '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+
+/** 四季的色调：同一张画，春天发绿、秋天发黄、冬天发白 */
+const SEASON_TINT = {
+  spring: 'rgba(150,205,120,.10)',
+  summer: 'rgba(255,224,130,.08)',
+  autumn: 'rgba(228,152,58,.15)',
+  winter: 'rgba(196,220,244,.22)'
+};
 
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
-  else ctx.rect(x, y, w, h);
+  else ctx.rect(x, y, w, h, r);
 }
 function circle(ctx, x, y, r) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
 }
-function ellipse(ctx, x, y, rx, ry) {
+function ellipse(ctx, x, y, rx, ry, rot = 0) {
   ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
 }
 function easeBack(t) {
   t = Math.max(0, Math.min(1, t));
@@ -28,10 +41,23 @@ function easeBack(t) {
 }
 
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, { images } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this._spawnUsed = null;
+    this._imgs = Object.assign(Object.create(null), images || {});
+  }
+
+  /** 底图按需加载；Node / 没加载好之前返回 null，就退回矢量画法 */
+  _bg(src) {
+    if (!src) return null;
+    const cached = this._imgs[src];
+    if (cached) return cached.complete && cached.naturalWidth ? cached : null;
+    if (typeof Image === 'undefined') return null;
+    const im = new Image();
+    im.src = src;
+    this._imgs[src] = im;
+    return null;
   }
 
   /** 每个物件长出来时的弹性动画：先冲过头，再弹回来 */
@@ -51,21 +77,32 @@ export class Renderer {
   draw(game) {
     const ctx = this.ctx;
     const w = game.world;
+    const sc = game.scene;
     this._now = game.now;
     this._spawnUsed = game.spawned ? game.spawned.map((s) => ({ kind: s.kind, born: s.born, used: false })) : null;
 
     ctx.clearRect(0, 0, w.width, w.height);
-    this._ground(w);
-    this._water(w, game.now);
-    this._field(w, game.now);
-    this._house(w);
-    this._trees(w, game);
-    this._granny(w);
+
+    const img = sc && sc.bg ? this._bg(sc.bg) : null;
+    if (img) {
+      ctx.drawImage(img, 0, 0, w.width, w.height);
+      this._seasonWash(game);
+    } else {
+      this._ground(w);
+      this._water(w, sc, game.now);
+      this._field(w, sc, game.now);
+      this._house(w, sc);
+      this._trees(w, sc, game);
+    }
+
+    this._points(game, !!img);
+    this._doors(game);
+    this._granny(sc);
 
     if (game.mode === 'play') {
       this._nymphs(game);
       this._player(game);
-      this._dayNight(game);
+      this._dayNight(game, sc);
       this._hud(game);
       if (game.ended) this._ending(game);
     } else {
@@ -73,7 +110,19 @@ export class Renderer {
     }
   }
 
-  /* ---------- 地面 ---------- */
+  _seasonWash(game) {
+    if (!game.world.seasonal) return;
+    const ctx = this.ctx;
+    const w = game.world;
+    const tint = SEASON_TINT[game.season ? game.season.id : 'summer'];
+    if (!tint) return;
+    ctx.save();
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, w.width, w.height);
+    ctx.restore();
+  }
+
+  /* ---------- 地面（矢量兜底） ---------- */
   _ground(w) {
     const ctx = this.ctx;
     ctx.fillStyle = w.palette.ground;
@@ -99,12 +148,12 @@ export class Renderer {
   }
 
   /* ---------- 水 ---------- */
-  _water(w, t) {
-    if (!w.water) return;
+  _water(w, sc, t) {
+    if (!sc || !sc.water) return;
     const ctx = this.ctx;
     const s = this._scale('water');
     if (s <= 0.001) return;
-    const r = w.water.type === 'pond' ? w.layout.pond : w.layout.river;
+    const r = sc.water.type === 'pond' ? w.layout.pond : w.layout.river;
     const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     ctx.save();
     ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
@@ -142,8 +191,8 @@ export class Renderer {
   }
 
   /* ---------- 田 ---------- */
-  _field(w, t) {
-    if (!w.field || w.field.type !== 'wheat') return;
+  _field(w, sc, t) {
+    if (!sc || !sc.field || sc.field.type !== 'wheat') return;
     const ctx = this.ctx;
     const s = this._scale('field');
     if (s <= 0.001) return;
@@ -168,12 +217,12 @@ export class Renderer {
   }
 
   /* ---------- 房子 ---------- */
-  _house(w) {
-    if (!w.house) return;
+  _house(w, sc) {
+    if (!sc || !sc.house) return;
     const ctx = this.ctx;
     const s = this._scale('house');
     if (s <= 0.001) return;
-    const h = w.house;
+    const h = sc.house;
     const cx = h.x + h.w / 2, cy = h.y + h.h / 2;
     ctx.save();
     ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
@@ -194,13 +243,11 @@ export class Renderer {
     ctx.closePath();
     ctx.fill();
 
-    // 门
     ctx.fillStyle = '#6b4a2f';
     ctx.fillRect(h.x + h.w / 2 - 20, h.y + h.h - 52, 40, 52);
     ctx.fillStyle = '#e8c86a';
     circle(ctx, h.x + h.w / 2 + 13, h.y + h.h - 28, 3); ctx.fill();
 
-    // 窗
     ctx.fillStyle = w.palette.window;
     ctx.fillRect(h.x + 16, h.y + 32, 34, 30);
     ctx.fillRect(h.x + h.w - 50, h.y + 32, 34, 30);
@@ -209,12 +256,9 @@ export class Renderer {
     ctx.strokeRect(h.x + 16, h.y + 32, 34, 30);
     ctx.strokeRect(h.x + h.w - 50, h.y + 32, 34, 30);
 
-    // 屋檐下挂的玉米和干辣椒（南北方都有，但南方白墙房子不挂）
     if (w.houseKind !== 'whiteblack') {
       ctx.fillStyle = '#d9a441';
-      for (let i = 0; i < 3; i++) {
-        ellipse(ctx, h.x + 30 + i * 26, h.y + 14, 5, 12, 0.2); ctx.fill();
-      }
+      for (let i = 0; i < 3; i++) ellipse(ctx, h.x + 30 + i * 26, h.y + 14, 5, 12, 0.2), ctx.fill();
       ctx.strokeStyle = '#b03a2a';
       ctx.lineWidth = 3;
       for (let j = 0; j < 3; j++) {
@@ -228,14 +272,15 @@ export class Renderer {
   }
 
   /* ---------- 树 ---------- */
-  _trees(w, game) {
+  _trees(w, sc, game) {
+    if (!sc) return;
     const ctx = this.ctx;
     const t = game.now;
 
-    if (w.orchard.length) {
+    if ((sc.orchard || []).length) {
       const s = this._scale('tree');
       if (s > 0.001) {
-        w.orchard.forEach((p, idx) => {
+        sc.orchard.forEach((p) => {
           ctx.save();
           ctx.translate(p.x, p.y); ctx.scale(s, s); ctx.translate(-p.x, -p.y);
           ctx.fillStyle = 'rgba(90,70,40,.18)';
@@ -257,10 +302,10 @@ export class Renderer {
       }
     }
 
-    if (w.aspens.length) {
+    if ((sc.aspens || []).length) {
       const s = this._scale('aspen');
       if (s > 0.001) {
-        w.aspens.forEach((p, idx) => {
+        sc.aspens.forEach((p, idx) => {
           ctx.save();
           ctx.translate(p.x, p.y); ctx.scale(s, s); ctx.translate(-p.x, -p.y);
           ctx.fillStyle = 'rgba(90,70,40,.2)';
@@ -285,12 +330,12 @@ export class Renderer {
     }
   }
 
-  _granny(w) {
-    if (!w.granny) return;
+  _granny(sc) {
+    if (!sc || !sc.granny) return;
     const ctx = this.ctx;
     const s = this._scale('granny');
     if (s <= 0.001) return;
-    const g = w.granny;
+    const g = sc.granny;
     ctx.save();
     ctx.translate(g.x, g.y); ctx.scale(s, s); ctx.translate(-g.x, -g.y);
     ctx.fillStyle = 'rgba(90,70,40,.18)';
@@ -304,6 +349,95 @@ export class Renderer {
     ctx.arc(g.x, g.y - 14, 9, Math.PI, 0);
     ctx.fill();
     ctx.restore();
+  }
+
+  /**
+   * 玩法点标记。
+   * 有底图时必须画 —— 画上认不出哪棵树能摘，玩家只能瞎走。
+   * 季节不对的点画成灰的，等于告诉玩家"秋天再来"。
+   */
+  _points(game, hasBg) {
+    const ctx = this.ctx;
+    const sc = game.scene;
+    if (!sc) return;
+    const bob = Math.sin(game.now / 420) * 3;
+
+    for (const id of game.world.activities) {
+      const pts = sc.activityPos[id];
+      if (!pts) continue;
+      const meta = game.world.activityMeta[id] || { label: id };
+      const ok = game.mode !== 'play' || game.seasonOk(id);
+      for (const p of pts) {
+        ctx.save();
+        ctx.globalAlpha = ok ? 0.92 : 0.45;
+        // 地面上的一个圈，标出"站这儿能干嘛"
+        ctx.strokeStyle = ok ? 'rgba(255,255,255,.85)' : 'rgba(220,220,220,.7)';
+        ctx.fillStyle = ok ? 'rgba(255,214,120,.35)' : 'rgba(190,190,190,.25)';
+        ctx.lineWidth = 2;
+        ellipse(ctx, p.x, p.y + 16, 20, 8); ctx.fill(); ctx.stroke();
+
+        const label = meta.label + (ok ? '' : '（' + (meta.seasons || []).map((s) => (SEASONS.find((x) => x.id === s) || {}).label).filter(Boolean).join('/') + '）');
+        ctx.font = '12px ' + FONT;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(255,252,244,.94)';
+        rr(ctx, p.x - tw / 2 - 9, p.y - 30 + bob, tw + 18, 22, 11); ctx.fill();
+        ctx.strokeStyle = ok ? 'rgba(184,139,71,.75)' : 'rgba(160,160,160,.6)';
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = ok ? '#8a5f2a' : '#8a8a8a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, p.x, p.y - 19 + bob);
+        ctx.restore();
+      }
+    }
+    if (hasBg && game.mode !== 'play') {
+      ctx.save();
+      ctx.textAlign = 'right';
+      ctx.font = '12px ' + FONT;
+      ctx.fillStyle = 'rgba(90,80,60,.65)';
+      ctx.fillText(sc.name || '', game.world.width - 18, game.world.height - 18);
+      ctx.restore();
+    }
+  }
+
+  /** 门：一个拱门 + 去向 */
+  _doors(game) {
+    const ctx = this.ctx;
+    const sc = game.scene;
+    if (!sc || !sc.doors || !sc.doors.length) return;
+    for (const d of sc.doors) {
+      const hot = game.nearDoor === d;
+      const bob = Math.sin(game.now / 380 + d.x) * 2;
+      ctx.save();
+      ctx.globalAlpha = hot ? 1 : 0.88;
+      // 门洞
+      ctx.fillStyle = 'rgba(96,66,40,.9)';
+      ctx.beginPath();
+      ctx.moveTo(d.x - 20, d.y + 18);
+      ctx.lineTo(d.x - 20, d.y - 14);
+      ctx.quadraticCurveTo(d.x, d.y - 34, d.x + 20, d.y - 14);
+      ctx.lineTo(d.x + 20, d.y + 18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,232,180,' + (hot ? 0.95 : 0.7) + ')';
+      ctx.beginPath();
+      ctx.moveTo(d.x - 14, d.y + 18);
+      ctx.lineTo(d.x - 14, d.y - 11);
+      ctx.quadraticCurveTo(d.x, d.y - 28, d.x + 14, d.y - 11);
+      ctx.lineTo(d.x + 14, d.y + 18);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.font = '12px ' + FONT;
+      const tw = ctx.measureText(d.label).width;
+      ctx.fillStyle = 'rgba(60,44,26,.9)';
+      rr(ctx, d.x - tw / 2 - 8, d.y + 22 + bob, tw + 16, 20, 10); ctx.fill();
+      ctx.fillStyle = '#ffe9c2';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(d.label, d.x, d.y + 33 + bob);
+      ctx.restore();
+    }
   }
 
   /* ---------- 知了猴 ---------- */
@@ -352,7 +486,7 @@ export class Renderer {
   }
 
   /* ---------- 昼夜 ---------- */
-  _dayNight(game) {
+  _dayNight(game, sc) {
     const ctx = this.ctx;
     const w = game.world;
     const n = nightAmount(game.gameT);
@@ -367,9 +501,9 @@ export class Renderer {
     ctx.fillRect(0, 0, w.width, w.height);
     ctx.restore();
 
-    // 天黑之后，家里的窗和门口那盏灯会亮起来
-    if (n > 0.5 && w.house) {
-      const h = w.house;
+    // 天黑之后，家里的窗会亮起来
+    if (n > 0.5 && sc && sc.house) {
+      const h = sc.house;
       ctx.save();
       ctx.globalAlpha = (n - 0.5) * 2;
       ctx.fillStyle = 'rgba(255,206,110,.95)';
@@ -380,6 +514,13 @@ export class Renderer {
       circle(ctx, h.x + h.w / 2, h.y + h.h - 24, 60); ctx.fill();
       ctx.restore();
     }
+    // 屋里/院子天黑了要更暗一点：这是农村的夜，不是城市的夜
+    if (n > 0.6 && sc && sc.id === 'indoor') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(20,16,30,' + (0.25 * (n - 0.6) / 0.4) + ')';
+      ctx.fillRect(0, 0, w.width, w.height);
+      ctx.restore();
+    }
   }
 
   /* ---------- HUD ---------- */
@@ -387,49 +528,88 @@ export class Renderer {
     const ctx = this.ctx;
     const w = game.world;
     const p = phaseOf(game.gameT);
+    const season = game.season || SEASONS[0];
 
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,252,244,.92)';
-    rr(ctx, 14, 12, 500, 40, 10); ctx.fill();
-    ctx.strokeStyle = 'rgba(180,160,120,.45)';
-    ctx.lineWidth = 1; ctx.stroke();
-
-    ctx.font = '14px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
     const items = [
       ['鱼', game.bag.fish, 'fish'],
       ['果子', game.bag.fruit, 'fruit'],
       ['知了', game.bag.cicada, 'cicada'],
-      ['知了猴', game.bag.nymph, 'nymph']
-    ];
+      ['知了猴', game.bag.nymph, 'nymph'],
+      ['蛋', game.bag.eggs, 'eggs'],
+      ['菜', game.bag.veg, 'garden'],
+      ['蚯蚓', game.bag.earthworm, 'worms'],
+      ['蚂蚱', game.bag.grasshopper, 'grasshopper'],
+      ['烤货', game.bag.baked, 'bake']
+    ].filter((it) => w.activities.includes(it[2]));
+
+    ctx.save();
+    ctx.font = '13px ' + FONT;
+    let inner = 16;
+    for (const it of items) inner += it[0].length * 14 + 26;
+    const boxW = Math.min(w.width - 28, inner + 96);
+
+    ctx.fillStyle = 'rgba(255,252,244,.92)';
+    rr(ctx, 14, 12, boxW, 40, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(180,160,120,.45)';
+    ctx.lineWidth = 1; ctx.stroke();
+
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
     let x = 28;
     items.forEach((it) => {
-      ctx.globalAlpha = w.activities.includes(it[2]) ? 1 : 0.35;
       ctx.fillStyle = '#8a7c66';
       ctx.fillText(it[0], x, 32);
-      ctx.font = '600 15px -apple-system,"PingFang SC",sans-serif';
+      ctx.font = '600 14px ' + FONT;
       ctx.fillStyle = '#4a3f2e';
-      ctx.fillText(String(it[1]), x + it[0].length * 15 + 4, 32);
-      ctx.font = '14px -apple-system,"PingFang SC",sans-serif';
-      x += it[0].length * 15 + 30;
+      ctx.fillText(String(it[1]), x + it[0].length * 14 + 3, 32);
+      ctx.font = '13px ' + FONT;
+      x += it[0].length * 14 + 26;
     });
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#a08e6e';
-    ctx.fillText(p.label, 500, 32);
+
+    // 季节 + 时段（只有全场景地域才有四季）
+    if (w.seasonal) {
+      ctx.textAlign = 'right';
+      ctx.font = '600 13px ' + FONT;
+      ctx.fillStyle = '#a05f2a';
+      ctx.fillText(season.label, boxW - 2, 32);
+      ctx.font = '12px ' + FONT;
+      ctx.fillStyle = '#a08e6e';
+      ctx.fillText(p.label + ' · TAB 换季', boxW - 40, 32);
+    } else {
+      ctx.textAlign = 'right';
+      ctx.font = '12px ' + FONT;
+      ctx.fillStyle = '#a08e6e';
+      ctx.fillText(p.label, boxW + 2, 32);
+    }
     ctx.restore();
 
+    // 场景名
+    if (game.scene && game.scene.name) {
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.font = '12px ' + FONT;
+      ctx.fillStyle = 'rgba(255,252,244,.9)';
+      const sn = game.scene.name;
+      const sw = ctx.measureText(sn).width;
+      rr(ctx, 14, 58, sw + 22, 24, 8); ctx.fill();
+      ctx.fillStyle = '#7a5a20';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sn, 25, 71);
+      ctx.restore();
+    }
+
     // 靠近时的交互提示
+    const h = game.hint;
     let hint = null;
     if (game.nearGranny) hint = '空格 · 听听她喊什么';
-    else if (game.nearActivity) {
-      hint = '空格 · ' + game.nearActivity.label;
-      if (game.nearActivity.id === 'nymph' && !game.nymphTime) hint = null;
+    else if (h && h.kind === 'door') hint = '空格 · ' + h.label;
+    else if (h && h.kind === 'activity') {
+      hint = '空格 · ' + h.label;
+      if (h.id === 'nymph' && !game.nymphTime) hint = null;
     }
     if (hint) {
       ctx.save();
-      ctx.font = '13px -apple-system,"PingFang SC",sans-serif';
+      ctx.font = '13px ' + FONT;
       const tw = ctx.measureText(hint).width;
       const px = game.player.x, py = game.player.y;
       ctx.fillStyle = 'rgba(40,32,20,.82)';
@@ -447,7 +627,7 @@ export class Renderer {
       if (age <= 1) {
         ctx.save();
         ctx.globalAlpha = age < 0.75 ? 1 : (1 - age) / 0.25;
-        ctx.font = '15px -apple-system,"PingFang SC",sans-serif';
+        ctx.font = '15px ' + FONT;
         const tw = ctx.measureText(game.toast.text).width;
         ctx.fillStyle = 'rgba(255,252,244,.96)';
         rr(ctx, w.width / 2 - tw / 2 - 16, w.height - 68, tw + 32, 40, 12); ctx.fill();
@@ -473,7 +653,7 @@ export class Renderer {
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.fillStyle = '#8a5f2a';
-      ctx.font = '14px -apple-system,"PingFang SC",sans-serif';
+      ctx.font = '14px ' + FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('交互', b.x, b.y);
@@ -485,34 +665,9 @@ export class Renderer {
   _marks(game) {
     const ctx = this.ctx;
     const w = game.world;
-    w.activities.forEach((id) => {
-      const p = w.activityPos[id];
-      const meta = w.activityMeta[id];
-      if (!p || !meta) return;
-      const s = this._scale(id);
-      if (s <= 0.001) return;
-      const bob = Math.sin(game.now / 420 + p.x) * 3;
-      ctx.save();
-      ctx.translate(p.x, p.y + bob);
-      ctx.scale(s, s);
-      ctx.translate(-p.x, -(p.y + bob));
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#b98b47';
-      ctx.lineWidth = 2;
-      rr(ctx, p.x - 34, p.y - 14, 68, 28, 14);
-      ctx.fill(); ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#8a5f2a';
-      ctx.font = '13px -apple-system,"PingFang SC",sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(meta.label, p.x, p.y + 1);
-      ctx.restore();
-    });
     ctx.save();
     ctx.textAlign = 'right';
-    ctx.font = '12px -apple-system,"PingFang SC",sans-serif';
+    ctx.font = '12px ' + FONT;
     ctx.fillStyle = 'rgba(90,80,60,.65)';
     ctx.fillText('已放置 ' + w.activities.length + ' 个玩法点', w.width - 18, w.height - 18);
     ctx.restore();
@@ -530,17 +685,20 @@ export class Renderer {
     if (w.activities.includes('fruit')) lines.push('摘了 ' + game.bag.fruit + ' 个果子');
     if (w.activities.includes('cicada')) lines.push('粘了 ' + game.bag.cicada + ' 只知了');
     if (w.activities.includes('nymph')) lines.push('抓了 ' + game.bag.nymph + ' 只知了猴');
+    if (w.activities.includes('grasshopper')) lines.push('抓了 ' + game.bag.grasshopper + ' 只蚂蚱');
+    if (w.activities.includes('eggs')) lines.push('捡了 ' + game.bag.eggs + ' 个鸡蛋');
+    if (w.activities.includes('bake')) lines.push('烤了 ' + game.bag.baked + ' 回东西');
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f6ecd8';
-    ctx.font = '600 30px -apple-system,"PingFang SC",sans-serif';
-    ctx.fillText('天彻底黑了', w.width / 2, 190);
-    ctx.font = '16px -apple-system,"PingFang SC",sans-serif';
+    ctx.font = '600 30px ' + FONT;
+    ctx.fillText(w.multi ? '一年过去了' : '天彻底黑了', w.width / 2, 190);
+    ctx.font = '16px ' + FONT;
     ctx.fillStyle = '#e2d5bb';
     lines.forEach((l, i) => ctx.fillText(l, w.width / 2, 240 + i * 30));
-    ctx.font = '17px -apple-system,"PingFang SC",sans-serif';
+    ctx.font = '17px ' + FONT;
     ctx.fillStyle = '#f2c98a';
     ctx.fillText('「' + (w.call || '回来吃饭') + '」', w.width / 2, 250 + lines.length * 30 + 26);
-    ctx.font = '13px -apple-system,"PingFang SC",sans-serif';
+    ctx.font = '13px ' + FONT;
     ctx.fillStyle = '#b9ac91';
     ctx.fillText('按 R 再玩一次 · 这个世界会一直在，你什么时候回来它都在', w.width / 2, w.height - 70);
     ctx.restore();

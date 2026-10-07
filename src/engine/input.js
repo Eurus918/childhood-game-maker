@@ -11,7 +11,7 @@ export function actionButtonRect(width, height) {
 }
 
 export class Input {
-  constructor(canvas, { onAction, onRestart, onFirstGesture } = {}) {
+  constructor(canvas, { onAction, onRestart, onSeason, onFirstGesture } = {}) {
     this.canvas = canvas;
     this.keys = Object.create(null);
     this.target = null;
@@ -19,6 +19,7 @@ export class Input {
     this._gestured = false;
     this._onAction = onAction || (() => {});
     this._onRestart = onRestart || (() => {});
+    this._onSeason = onSeason || (() => {});
     this._onFirstGesture = onFirstGesture || (() => {});
 
     this._bind();
@@ -42,10 +43,12 @@ export class Input {
   _bind() {
     const kd = (e) => {
       this._gesture();
-      this.keys[e.key] = true;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
-      if (e.key === ' ' || e.key === 'j' || e.key === 'J') this._onAction();
-      if (e.key === 'r' || e.key === 'R') this._onRestart();
+      const k = e.key;
+      this.keys[k] = true;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k)) e.preventDefault();
+      if (k === ' ' || k === 'j' || k === 'J') this._onAction();
+      if (k === 'r' || k === 'R') this._onRestart();
+      if (k === 'Tab' || k === 'q' || k === 'Q') this._onSeason();
     };
     const ku = (e) => { this.keys[e.key] = false; };
     window.addEventListener('keydown', kd);

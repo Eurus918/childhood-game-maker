@@ -7,6 +7,7 @@ export default {
   id: 'cicada',
   label: '粘知了',
   verb: '粘知了',
+  seasons: ['summer'],
   keywords: ['知了', '蝉', '粘', '面筋', '叫', '爬叉'],
   reply: '粘知了放进去了。面筋要提前嚼好久，杆子得举得稳——所以我给它加了「惊飞」：你靠太近，它就"吱"一声飞走了，只留下树叶晃。',
   sound: 'fly',

@@ -34,3 +34,28 @@ export function isCicadaTime(gameT) {
 export function isNymphTime(gameT) {
   return nightAmount(gameT) > 0.35;
 }
+
+/* ---------------- 四季 ----------------
+ * 这是比昼夜更大的一层"等待"：春抓蚂蚱、夏钓鱼、秋摘果、冬烤鹅蛋。
+ * 每季 90 秒，一年 6 分钟；也允许玩家手动换季（有些回忆不想等）。
+ */
+
+export const SEASON_LEN = 90;
+
+export const SEASONS = [
+  { id: 'spring', label: '春天' },
+  { id: 'summer', label: '夏天' },
+  { id: 'autumn', label: '秋天' },
+  { id: 'winter', label: '冬天' }
+];
+
+export function seasonIndex(seasonT) {
+  return Math.floor((((seasonT % (SEASON_LEN * 4)) + SEASON_LEN * 4) % (SEASON_LEN * 4)) / SEASON_LEN);
+}
+export function seasonOf(seasonT) {
+  return SEASONS[seasonIndex(seasonT)];
+}
+/** 把季节拨到第 idx 季 */
+export function seekSeason(idx) {
+  return idx * SEASON_LEN + 1;
+}

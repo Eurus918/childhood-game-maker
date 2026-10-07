@@ -1,0 +1,17 @@
+{
+  "name": "童年游戏制作小助手",
+  "short_name": "童年游戏",
+  "description": "聊几句，把你小时候住过的地方做成一个能走进去、能发给别人玩的小世界。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#f4ecd9",
+  "theme_color": "#7a5a20",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

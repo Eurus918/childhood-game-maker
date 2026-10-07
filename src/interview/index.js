@@ -48,6 +48,8 @@ export class Interview {
           : [];
     return src
         .filter((item) => !(s.dedupe && this.answers[s.dedupe] === item.id))
+        // pickable:false 的素材由地域自带（比如"坐炕上"），不进选项列表凑数
+        .filter((item) => item.pickable !== false)
         .map((item) => ({
           t: item.name || item.label,
           kw: item.keywords || [],

@@ -25,19 +25,50 @@ content/       素材库：地域配色、玩法文案、提问流（社区共�
 
 | 路径 | 职责 |
 | --- | --- |
-| `src/engine/game.js` | 主循环、状态机（build / play）、交互分发 |
-| `src/engine/renderer.js` | 只画，不算。所有颜色来自 `world.palette` |
+| `src/engine/game.js` | 主循环、状态机（build / play）、**场景切换**、**季节**、交互分发 |
+| `src/engine/renderer.js` | 只画，不算。所有颜色来自 `world.palette`；底图来自 `scene.bg` |
 | `src/engine/actions.js` | 玩法机制（怎么随机、何时失败） |
-| `src/engine/collision.js` | 碰撞体，也是可达性的唯一真相来源 |
-| `src/engine/daynight.js` | 昼夜循环（96 秒一轮） |
+| `src/engine/collision.js` | 碰撞体（矩形/圆/线段），也是可达性的唯一真相来源 |
+| `src/engine/daynight.js` | 昼夜循环（96 秒一轮）+ **四季（每季 90 秒）** |
 | `src/engine/input.js` | 键盘 + 触屏 |
 | `src/engine/audio.js` | WebAudio 现场合成，仓库里没有音频文件 |
-| `src/world/layout.js` | 固定模板：地图坐标、树的位置 ⚠️ 改这里要跑测试 |
-| `src/world/builder.js` | 答案 → world 配置 |
+| `src/world/layout.js` | 固定模板：**五个场景的坐标、障碍、门、玩法点** ⚠️ 改这里要跑测试 |
+| `src/world/builder.js` | 答案 → world 配置；`ensureScenes()` 兼容旧存档 |
 | `src/world/serialize.js` | 存档导出/导入、分享链接编解码 |
 | `src/interview/` | 采访流程、关键词匹配、可选 LLM 适配器 |
 | `src/ui/` | 对话面板和清单，不含业务逻辑 |
 | `content/` | 素材库（CC BY 4.0，社区共建） |
+| `assets/scenes/` | 五张场景水彩底图（960×600） |
+| `sw.js` / `manifest.webmanifest` | PWA：装到桌面、离线可玩 |
+
+## 多场景
+
+一个世界由若干个**场景**组成，场景之间靠**门**走：
+
+```
+world.scenes = { yard, indoor, orchard, stream, field }   // 每个都有 spawn / doors / activityPos
+world.sceneOrder = ['yard', 'indoor', ...]
+world.startScene = 'yard'
+```
+
+- 场景的底图 `scene.bg` 是一张水彩画；**画负责"像不像"，`layout.js` 负责"走得通"**。
+  坐标是照着画反推的 —— 画里房子在哪，碰撞体就在哪。
+- 只有 `region.multi === true` 的地域（目前是北方农村）才解锁全部场景；
+  其它地域仍是单场景矢量背景，靠 `ensureScenes()` 补一层壳。
+- 门的判定半径（46px）比玩法点（72px）小，且**两者重叠时按"谁更贴身"决定**，
+  免得站在玩法点上按空格被传送走。这条有测试兜着。
+
+## 时间有两层
+
+```
+昼夜 gameT    96 秒一轮   知了白天叫、知了猴天黑才出土
+四季 seasonT  每季 90 秒  春天抓蚂蚱 / 夏天摸鱼 / 秋天摘果 / 冬天烤鹅蛋
+```
+
+四季只在 `world.seasonal`（= `multi`）时生效。季节不对的玩法不是"禁用"，
+而是给出一句「这个得等冬天，现在夏天还没有」—— 提示本身是内容。
+
+`TAB` 可以手动换季：有些回忆不想等。走完一整年（4 季）触发结算。
 
 ## 为什么不让 AI 自己发明玩法
 
@@ -66,8 +97,12 @@ content/       素材库：地域配色、玩法文案、提问流（社区共�
 
 `npm test` 里有一类特别的测试：**可达性校验**（`test/reach.test.js`）。
 
-它把所有「地域 × 地形 × 玩法」的组合都跑一遍 BFS，
-确认玩家从出生点能走到每个玩法点。
+它把所有「地域 × 地形 × 玩法」的组合都跑一遍 BFS，并且**每个场景都跑一遍**：
+
+- 从出生点能走到每个玩法点（半径 72px）
+- 每扇门都站得上去（半径 46px），且门通向的场景真实存在
+- **门不能压在玩法点上**（否则按空格会被传送走，不是做那件事）
+- 每个场景的出生点都不在墙里
 
 原因是：新增一棵树、挪一下池塘，很容易把某个玩法点堵死。
 这种 bug 画面上完全看不出来 —— 地图照常显示，玩家却永远走不过去。

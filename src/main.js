@@ -32,6 +32,15 @@ let world = emptyWorld(content);
 let game = new Game(canvas, world, { activities: content.activities });
 let finished = false;
 
+// 调试口子：想在控制台里翻这个世界，用 __cgm
+if (typeof window !== 'undefined') window.__cgm = game;
+
+/* ---------- PWA：装到桌面之后能离线打开 ---------- */
+// 只在 https / localhost 注册（file:// 下没有 service worker 这回事）
+if (location.protocol === 'https:' || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+  navigator.serviceWorker?.register('./sw.js').catch(() => { /* 装不上就算了，不影响玩 */ });
+}
+
 const checklist = new Checklist($('checklist'), interview.flow.steps.map((s) => ({
   key: s.key,
   label: interview.stepLabel(s.key)
@@ -50,7 +59,9 @@ game.start();
 
 /* ---------- 世界刷新 ---------- */
 function refreshWorld() {
-  world = buildWorld(interview.answers, content);
+  // 采访过程中只放用户亲口挑的那几件，世界是「边聊边长」的；
+  // 采访结束后才把整个地域的玩法全部铺开。
+  world = buildWorld(interview.answers, content, { phase: finished ? 'play' : 'build' });
   const now = performance.now();
   const plan = spawnPlan(world).map((p) => ({ kind: p.kind, born: now + p.born }));
   game.setWorld(world, plan);
@@ -113,7 +124,7 @@ playBtn.addEventListener('click', () => {
     chat.push('（你已经走进了' + world.title + '）', 'sys');
   }
   playBtn.textContent = '重玩一次';
-  controls.textContent = '方向键 / WASD 移动 · 空格 交互 · R 重来 · 手机上是点地面走过去 + 右下角「交互」';
+  controls.textContent = '方向键 / WASD 走动 · 空格 交互（走到门口按一下就换地方）· TAB 换季 · R 重来 · 手机上是点地面走过去 + 右下角「交互」';
 });
 
 $('exportBtn').addEventListener('click', () => {
